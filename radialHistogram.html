@@ -1,0 +1,477 @@
+
+<body>
+
+<style>
+
+    circle.overlay {
+        -webkit-transition: opacity 0.5s;
+        transition: opacity 0.5s;
+    }
+
+    body {
+        font-family: Helvetica,Arial,sans-serif
+        font-size: 16px;
+    }
+    .chart {
+        margin:20px auto 20px auto;
+        pointer-events: all;
+        display:block;
+    }
+
+    .chart path {
+        fill:none;
+    }
+	
+	svg {
+	font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif
+	}
+
+	.hour-label
+	{
+		font-size:12px;
+		fill:#ddd;
+	}
+
+
+</style>
+
+
+<script src="http://blog.scottlogic.com/ceberhardt/assets/app-store-analysis/d3.min.js"></script>
+<script src="http://blog.scottlogic.com/ceberhardt/assets/app-store-analysis/es5-shim.min.js"></script>
+<script src="http://blog.scottlogic.com/ceberhardt/assets/app-store-analysis/modernizr.custom.57943.js"></script>
+<script>
+
+function createBarChart(id, data) {
+    var width = 540,
+        height = 250;
+
+    var y = d3.scale.linear()
+        .domain([0, d3.max(data, function(d) { return d.value})])
+        .range([height, 0]);
+
+    var x = d3.scale.linear()
+        .domain([0, 360])
+        .range([0, width]);
+
+    var chart = d3.select(id)
+        .attr("width", width)
+        .attr("height", height);
+
+
+    // create the containers
+    var bar = chart.selectAll("g")
+        .data(data)
+      .enter()
+        .append("rect")
+        .attr("y", function(d) { return y(d.value); })
+        .attr("height", function(d) { return height - y(d.value); })
+        .attr("style", function(d) {
+            var hue = d.key / 360;
+            var rgb = hslToRgb(hue, 1.0, 0.4);
+            return "fill: rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+        })
+        .attr("x", function(d, i) { return x(d.key); })
+        .attr("width", 2.0);
+
+};
+
+//http://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion
+function hslToRgb(h, s, l){
+    var r, g, b;
+
+    if(s == 0){
+        r = g = b = l; // achromatic
+    }else{
+        function hue2rgb(p, q, t){
+            if(t < 0) t += 1;
+            if(t > 1) t -= 1;
+            if(t < 1/6) return p + (q - p) * 6 * t;
+            if(t < 1/2) return q;
+            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+        }
+
+        var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        var p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+    }
+
+    return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+function rgbToFill(rgb){
+    return "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+}
+
+function renderCategories(id, rawData, fillFunction) {
+    var data = [];
+     var lines = rawData.split(";");
+     for (var i = 0; i< lines.length; i++) {
+        var components = lines[i].split(",");
+        var obj = { category : components[0], histogram : [] };
+        for (var j=1; j< components.length; j++) {
+            obj.histogram.push({key:(j*10-5), value:components[j]});
+        };
+
+        var max = d3.max(obj.histogram, function(d) { return d.value});
+        for (var j=0; j< obj.histogram.length; j++) {
+            obj.histogram[j].value /= max;
+        };
+        data.push(obj);
+     };
+
+    var width = 400,
+        baseline = 150,
+        rowHeight = 30,
+        barWidth = 20;
+
+    var chart = d3.select("#" + id)
+        .attr("width", width)
+        .attr("height", rowHeight * data.length);
+
+    // create the containers for each category
+    var bar = chart.selectAll("g")
+        .data(data)
+        .enter()
+        .append("g")
+        .attr("transform", function(d, i) { return "translate(" + baseline + "," + i * rowHeight + ")"})
+        // render the ratings for this category
+        .each(ratingsChart);
+
+    // create the category labels
+    bar.append("text")
+        .attr("style", "text-anchor: end;")
+        .attr("y", rowHeight / 2 - 4)
+        .attr("transform", "translate(-5, 0)")
+        .attr("dy", ".35em")
+        .text(function(d) { return d.category; });
+
+    function ratingsChart(data) {
+        var g = d3.select(this);
+        var height = rowHeight - 10;
+        var barWidth = width - baseline;
+
+        var y = d3.scale.linear()
+                .domain([0, d3.max(data.histogram, function(d) { return d.value})])
+                .range([0, height]);
+
+        var x = d3.scale.linear()
+                .domain([0, data.histogram.length * 10])
+                .range([0, barWidth]);
+
+        g.selectAll("g")
+            .data(data.histogram)
+            .enter()
+            .append("rect")
+            .attr("x", function(d) { return x(d.key-5); })
+            .attr("y", function(d) { return height - y(d.value); })
+            .attr("height", function(d) { return y(d.value); })
+            .attr("width", x(10))
+            .attr("style", fillFunction);
+
+        g.selectAll("g")
+            .data(data.histogram)
+            .enter()
+            .append("rect")
+            .attr("x", function(d) { return x(d.key-5); })
+            .attr("y", function(d) { return height - y(d.value); })
+            .attr("height", 1)
+            .attr("width", x(10))
+            .attr("fill", "black");
+    }
+}
+</script>
+
+
+
+
+<svg id="radialHistogram" class="chart"></svg>
+
+<script>
+(function(){
+	
+	var data = "248.8 460.2 267.1 323.0 265.4 453.7 434.7 426.0 282.5 420.0 297.0 449.1 423.1 235.7 259.8 415.8 329.7 324.6 441.0 409.6 233.0 428.7 427.8 257.8 205.5 322.3 276.5 222.2 224.6 263.3 221.8 278.4 295.9 409.6 201.2 322.3 389.7 372.8 288.2 421.5 449.8 432.4 323.2 456.4 431.1 211.9 409.8 319.5 328.3 295.2 367.6 206.3 453.3 459.9 218.3 306.3 407.0 344.9 360.5 401.6 433.0 422.0 268.6 346.6 279.9 418.0 281.5 439.2 364.3 434.9 265.9 415.0 215.4 312.1 324.5 203.5 449.3 409.0 333.9 439.5 223.9 299.2 241.5 366.7 355.2 430.4 349.0 317.7 288.2 214.5 262.6 273.9 371.5 370.5 215.0 459.4 409.0 458.7 233.6 370.5 374.0 268.2 400.7 359.2 391.7 423.2 419.0 313.8 460.6 395.3 307.1 452.6 239.6 237.4 265.0 327.3 390.0 206.6 359.2 334.6 368.6 255.5 339.6 229.0 294.3 337.8 443.9 303.6 223.3 415.9 374.6 254.2 397.2 234.0 212.1 442.5 203.2 266.2 404.5 402.2 425.8 437.4 316.0 459.5 373.6 431.5 286.4 291.4 375.5 420.3 273.1 324.4 309.0 266.7 291.0 239.6 290.1 267.0 415.8 271.4 271.6 425.3 321.1 211.0 408.4 294.9 293.4 427.5 303.4 329.5 266.5 210.8 446.7 247.4 357.6 423.5 320.9 443.4 325.8 347.1 305.0 418.8 432.6 362.6 274.9 403.4 454.7 346.0 434.7 208.4 461.8 257.7 285.5 282.1 325.7 244.1 211.2 203.0 362.7 435.3 237.5 439.1 409.4 446.0 330.0 417.0 251.5 330.0 446.6 352.5 313.0 349.9 403.4 389.7 354.0 394.2 228.4 213.8 263.8 453.4 256.7 422.7 228.2 408.8 314.2"
+
+    var datapoints = data.split(" ");
+    var histogram = [];
+    var sum = 0;
+    for (var i = 0; i < datapoints.length; i++) {
+        var datapoint = datapoints[i];
+        histogram.push({ key: i, value: datapoint*1 });
+        sum+= datapoint/1000;
+    };
+
+    var width = 600,
+        height = 600,
+        maxBarHeight = 230, //radius of outer circle
+        center = 50, //radius of center 
+        cx = width/2,
+        cy = height/2;
+
+	//converts degrees to radians
+    var radialScale = d3.scale.linear()
+        .domain([0, 360])
+        .range([0, 2 * Math.PI]);
+
+    var scale = d3.scale.linear()
+        .domain([0, d3.max(histogram, function(d) { return d.value})])
+        .range([center, maxBarHeight]);
+
+    var vis = d3.select("#radialHistogram")
+        .attr("width", width)
+        .attr("height", height);
+
+
+    var innerCircle = vis.append("circle")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("r", center)
+        .attr("fill", "white")
+        .attr("stroke", "black")
+        .attr("stroke-width", "2px");
+
+    var innerCircleOverlay = vis.append("circle")
+        .attr("cx", cx)
+        .attr("cy", cy)
+        .attr("class", "overlay")
+        .attr("r", center)
+        .attr("fill", "white")
+        .attr("style", "opacity:1")
+        .attr("stroke", "black")
+        .attr("stroke-width", "2px");
+
+    var text = vis.append("text")
+        .attr("x", cx)
+        .attr("y", cy)
+        .attr("font-size", "30px")
+        .attr("text-anchor", "middle")
+        .text(sum.toFixed(1));
+		
+
+    var text2 = vis.append("text")
+        .attr("x", cx)
+        .attr("y", cy + 20)
+        .attr("text-anchor", "middle")
+        .text("Kilowatts");
+		
+
+	var slices= 24;
+		
+
+		
+
+	//minutes in a day
+	var minDay = 1440;
+	var intervals = 1440/5; //how many data points we want (288)
+	//scale points to degrees
+	var intervalsToDegreesScale = d3.scale.linear()
+		.domain([0, intervals])
+		.range([0, 360]);
+
+    //Our d3 arc generator for the labels.
+    // var label = d3.svg.arc()
+      // .innerRadius(maxBarHeight + 0)
+      // .outerRadius(maxBarHeight + 0)
+      // .startAngle(function (d, i) {return 2 * Math.PI * (i/slices);})
+      // .endAngle(function (d, i) {return 2 * Math.PI * ((i+1)/slices);});
+	  
+
+
+		
+	//colored arc
+    var arc = d3.svg.arc()
+        .innerRadius(center)
+        .outerRadius(function(d) { return scale(d.value); })
+        .startAngle(function(d) { return radialScale(d.key); })
+        .endAngle(function(d) { return radialScale(d.key + intervalsToDegreesScale(1) ); }); //how many degrees we want the arc to go is a scale problem
+
+	//hover over arc
+    var arc2 = d3.svg.arc()
+        .innerRadius(function(d) { return scale(d.value); })
+        .outerRadius(maxBarHeight)
+        .startAngle(function(d) { return radialScale(d.key); })
+        .endAngle(function(d) { return radialScale(d.key + intervalsToDegreesScale(1) ); });
+
+    var data = vis.selectAll("path")
+        .data(histogram)
+        .enter();
+
+    // //Add our labels.
+    // var labels = data.append("text")
+        // .attr("transform", function(d,i) { return "translate(" + label.centroid(d,i) + ")"; })
+		// .attr("x", cx)
+        // .attr("y", cy)
+        // .attr("dy", ".35em")
+        // .attr("text-anchor", "middle")
+        // .text(function(d,i) { return i+1; });
+		
+    // outer path (hovering over empty space)
+    data.append("path")
+        .attr("d", arc2)
+        .attr("transform", "translate(" + cx + "," + cy +")")
+        .call(interactions, false);
+
+    // inner path (hovering over bar)
+    data.append("path")
+        .attr("d", arc)
+        .attr("style", function(d) {
+            var hue = d.key / 360;
+            var rgb = hslToRgb(hue, 0.5, 0.5);
+            return "fill: " + rgbToFill(rgb);
+        })
+        .attr("transform", "translate(" + cx + "," + cy +")")
+        .call(interactions, true);
+
+    function interactions(el, highlight) {
+        el.on("mouseover", function(d) {
+            if (highlight) {
+                d3.select(this)
+                    .attr("style", "fill:black");
+            } else {
+                d3.select(this)
+                    .attr("style", "fill:#bbb");
+            }
+
+            innerCircleOverlay.attr("style", "opacity:0");
+
+            var hue = d.key / 360;
+            var rgb = hslToRgb(hue, 0.8, 0.5);
+            innerCircle.attr("fill", rgbToFill(rgb));
+			console.log(d);
+			console.log(d.value);
+            text.text(d.value.toFixed(0)); //no decimal places
+            text2.text("Watts");
+        })
+        .on("mouseout", function(d) {
+            text.text(sum.toFixed(1));
+            text2.text("Kilowatts");
+
+            if (highlight) {
+                d3.select(this)
+                    .attr("style", function(d) {
+                        var hue = d.key / 360;
+                        var rgb = hslToRgb(hue, 0.5, 0.5);
+                        return "fill: " + rgbToFill(rgb);
+                    })
+            } else {
+                 d3.select(this)
+                    .attr("style", "fill:none");
+            }
+
+            innerCircleOverlay.attr("style", "opacity:1");
+        });
+    }
+		
+	function drawClock(){ //create all the clock elements
+		//updateData();	//draw them in the correct starting position
+	
+	    var secondLabelRadius = maxBarHeight/2 + 16;
+		var secondLabelYOffset = 5;
+		var radians = 0.0174532925;
+		
+		
+		var twentyFourHourScale = d3.scale.linear()
+
+		.domain([0,24])
+		.range([0,360]);
+	
+		var face = vis.append('g')
+			.attr('id','clock-face')
+			.attr('transform','translate('+(cx)+','+(cy)+')');
+
+		//add marks for seconds
+/* 		face.selectAll('.second-tick')
+			.data(d3.range(0,60)).enter()
+				.append('line')
+				.attr('class', 'second-tick')
+				.attr('x1',0)
+				.attr('x2',0)
+				.attr('y1',secondTickStart)
+				.attr('y2',secondTickStart + secondTickLength)
+				.attr('transform',function(d){
+					return 'rotate(' + secondScale(d) + ')';
+				}); */
+		//and labels
+
+		face.selectAll('.second-label')
+			.data(d3.range(0,24,4))
+				.enter()
+				.append('text')
+				.attr('class', 'hour-label')
+				.attr('text-anchor','middle')
+				.attr('x',function(d){
+					return secondLabelRadius*Math.sin(twentyFourHourScale(d)*radians);
+				})
+				.attr('y',function(d){
+					return -secondLabelRadius*Math.cos(twentyFourHourScale(d)*radians) + secondLabelYOffset;
+				})
+				.text(function(d){
+					return d;
+				});
+
+		// //... and hours
+		// face.selectAll('.hour-tick')
+			// .data(d3.range(0,12)).enter()
+				// .append('line')
+				// .attr('class', 'hour-tick')
+				// .attr('x1',0)
+				// .attr('x2',0)
+				// .attr('y1',hourTickStart)
+				// .attr('y2',hourTickStart + hourTickLength)
+				// .attr('transform',function(d){
+					// return 'rotate(' + hourScale(d) + ')';
+				// });
+
+		// face.selectAll('.hour-label')
+			// .data(d3.range(3,13,3))
+				// .enter()
+				// .append('text')
+				// .attr('class', 'hour-label')
+				// .attr('text-anchor','middle')
+				// .attr('x',function(d){
+					// return hourLabelRadius*Math.sin(hourScale(d)*radians);
+				// })
+				// .attr('y',function(d){
+					// return -hourLabelRadius*Math.cos(hourScale(d)*radians) + hourLabelYOffset;
+				// })
+				// .text(function(d){
+					// return d;
+				// });
+
+
+		// var hands = face.append('g').attr('id','clock-hands');
+
+		// face.append('g').attr('id','face-overlay')
+			// .append('circle').attr('class','hands-cover')
+				// .attr('x',0)
+				// .attr('y',0)
+				// .attr('r',clockRadius/20);
+
+		// hands.selectAll('line')
+			// .data(handData)
+				// .enter()
+				// .append('line')
+				// .attr('class', function(d){
+					// return d.type + '-hand';
+				// })
+				// .attr('x1',0)
+				// .attr('y1',function(d){
+					// return d.balance ? d.balance : 0;
+				// })
+				// .attr('x2',0)
+				// .attr('y2',function(d){
+					// return d.length;
+				// })
+				// .attr('transform',function(d){
+					// return 'rotate('+ d.scale(d.value) +')';
+				// });
+	}
+drawClock();
+
+}());
+</script>
+
+
+</body>
+
